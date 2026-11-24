@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sistem Perpustakaan Digital Terintegrasi</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen">
+  <!-- Header -->
+  <header class="bg-indigo-700 text-white shadow">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <div>
+        <h1 class="text-xl font-bold">Sistem Perpustakaan Digital Terintegrasi</h1>
+        <p class="text-xs text-indigo-200">Arsitektur 2-Service: Cloud Catalog (Firebase) &amp; Local Loan (SQLite)</p>
+      </div>
+      <div class="flex flex-wrap items-center gap-2 text-xs">
+        <span id="cloudBadge" class="px-3 py-1 rounded-full bg-slate-800 font-mono">Mengecek Service A...</span>
+        <a id="docsA" href="http://localhost:3001/api-docs" target="_blank" class="px-3 py-1 rounded bg-white/10 hover:bg-white/20">Swagger Service A</a>
+        <a href="/api-docs" target="_blank" class="px-3 py-1 rounded bg-white/10 hover:bg-white/20">Swagger Service B</a>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto px-4 py-6 space-y-6">
+    <!-- Live HTTP Communication Console -->
+    <section class="bg-slate-900 text-emerald-400 rounded-lg p-4 shadow font-mono text-xs">
+      <div class="flex justify-between items-center mb-2 border-b border-slate-700 pb-1">
+        <span class="font-semibold text-slate-300">LIVE INTER-SERVICE HTTP REST API LOG (Service B &harr; Service A)</span>
+        <button onclick="document.getElementById('apiLogs').innerHTML=''" class="text-slate-400 hover:text-white">Bersihkan</button>
+      </div>
+      <div id="apiLogs" class="space-y-1 max-h-28 overflow-y-auto">
+        <div>&gt; Menunggu aktivitas HTTP REST API...</div>
+      </div>
+    </section>
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <!-- KOLOM KIRI: SERVICE A (KATALOG FIREBASE) -->
+      <section class="bg-white rounded-lg shadow p-5 space-y-4">
+        <div class="border-b pb-2 flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-lg text-indigo-700">1. Katalog Buku (Service A - Cloud)</h2>
+            <p class="text-xs text-slate-500">Database Non-Relasional: Firebase Cloud Firestore</p>
+          </div>
+          <button onclick="loadCatalog()" class="text-xs bg-indigo-50 text-indigo-700 px-2.5 py-1 rounded hover:bg-indigo-100">Refresh</button>
+        </div>
+
+        <!-- Form Tambah Buku -->
+        <form id="bookForm" class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded border">
+          <input type="text" id="title" placeholder="Judul Buku" required class="col-span-2 px-3 py-1.5 text-sm border rounded" />
+          <input type="text" id="author" placeholder="Penulis" required class="px-3 py-1.5 text-sm border rounded" />
+          <input type="text" id="category" placeholder="Kategori (mis: Jaringan)" class="px-3 py-1.5 text-sm border rounded" />
+          <input type="text" id="isbn" placeholder="ISBN (Opsional)" class="px-3 py-1.5 text-sm border rounded" />
+          <input type="number" id="stock" placeholder="Stok" min="1" value="3" required class="px-3 py-1.5 text-sm border rounded" />
+          <button type="submit" class="col-span-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium py-1.5 rounded">
+            + Tambah Buku (POST /api/books)
+          </button>
+        </form>
+
+        <!-- Tabel Katalog -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+              <tr>
+                <th class="px-3 py-2">Judul &amp; Penulis</th>
+                <th class="px-3 py-2 text-center">Stok</th>
+                <th class="px-3 py-2 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="catalogTable" class="divide-y"></tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- KOLOM KANAN: SERVICE B (PEMINJAMAN LOKAL) -->
+      <section class="bg-white rounded-lg shadow p-5 space-y-4">
+        <div class="border-b pb-2 flex justify-between items-center">
+          <div>
+            <h2 class="font-bold text-lg text-emerald-700">2. Sirkulasi Peminjaman (Service B - Lokal)</h2>
+            <p class="text-xs text-slate-500">Database Relasional: SQLite Lokal (library_loans.db)</p>
+          </div>
+          <button onclick="loadLoans()" class="text-xs bg-emerald-50 text-emerald-700 px-2.5 py-1 rounded hover:bg-emerald-100">Refresh</button>
+        </div>
+
+        <!-- Form Peminjaman -->
+        <form id="loanForm" class="grid grid-cols-2 gap-2 bg-slate-50 p-3 rounded border">
+          <select id="bookSelect" required class="col-span-2 px-3 py-1.5 text-sm border rounded bg-white">
+            <option value="">-- Pilih Buku dari Katalog Cloud --</option>
+          </select>
+          <input type="text" id="borrowerName" placeholder="Nama Peminjam" required class="px-3 py-1.5 text-sm border rounded" />
+          <input type="text" id="borrowerNim" placeholder="NIM / ID Anggota" required class="px-3 py-1.5 text-sm border rounded" />
+          <button type="submit" class="col-span-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium py-1.5 rounded">
+            Pinjam Buku (POST /api/loans &rarr; PUT Stok Cloud)
+          </button>
+        </form>
+
+        <!-- Tabel Peminjaman -->
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm text-left">
+            <thead class="bg-slate-100 text-slate-600 text-xs uppercase">
+              <tr>
+                <th class="px-3 py-2">Peminjam &amp; Buku</th>
+                <th class="px-3 py-2 text-center">Status</th>
+                <th class="px-3 py-2 text-right">Aksi</th>
+              </tr>
+            </thead>
+            <tbody id="loanTable" class="divide-y"></tbody>
+          </table>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    function addLog(msg) {
+      const box = document.getElementById('apiLogs');
+      const time = new Date().toLocaleTimeString();
+      box.innerHTML += `<div>[${time}] ${msg}</div>`;
+      box.scrollTop = box.scrollHeight;
+    }
+
+    async function checkConfig() {
+      const res = await fetch('/api/config');
+      const data = await res.json();
+      const badge = document.getElementById('cloudBadge');
+      document.getElementById('docsA').href = `${data.catalogServiceUrl}/api-docs`;
+      if (data.catalogServiceStatus === 'ONLINE') {
+        badge.className = 'px-3 py-1 rounded-full bg-emerald-500 text-white font-mono';
+        badge.textContent = `Service A: ONLINE (${data.catalogServiceUrl})`;
+      } else {
+        badge.className = 'px-3 py-1 rounded-full bg-rose-500 text-white font-mono';
+        badge.textContent = `Service A: OFFLINE (${data.catalogServiceUrl})`;
+      }
+    }
+
+    async function loadCatalog() {
+      const res = await fetch('/api/catalog');
+      const result = await res.json();
+      if (result.inter_service_log) addLog(result.inter_service_log);
+
+      const tbody = document.getElementById('catalogTable');
+      const select = document.getElementById('bookSelect');
+      tbody.innerHTML = '';
+      select.innerHTML = '<option value="">-- Pilih Buku dari Katalog Cloud --</option>';
+
+      if (!result.success) return;
+      result.data.forEach((book) => {
+        tbody.innerHTML += `
+          <tr>
+            <td class="px-3 py-2">
+              <div class="font-medium text-slate-800">${book.title}</div>
+              <div class="text-xs text-slate-500">${book.author} • ${book.category}</div>
+            </td>
+            <td class="px-3 py-2 text-center">
+              <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${book.stock > 0 ? 'bg-indigo-100 text-indigo-700' : 'bg-rose-100 text-rose-700'}">
+                ${book.stock}
+              </span>
+            </td>
+            <td class="px-3 py-2 text-right space-x-1">
+              <button onclick="deleteBook('${book.id}')" class="text-xs text-rose-600 hover:underline">Hapus</button>
+            </td>
+          </tr>
+        `;
+        if (book.stock > 0) {
+          select.innerHTML += `<option value="${book.id}">${book.title} (Stok: ${book.stock})</option>`;
+        }
+      });
+    }
+
+    async function loadLoans() {
+      const res = await fetch('/api/loans');
+      const result = await res.json();
+      const tbody = document.getElementById('loanTable');
+      tbody.innerHTML = '';
+
+      result.data.forEach((loan) => {
+        const isBorrowed = loan.status === 'BORROWED';
+        tbody.innerHTML += `
+          <tr>
+            <td class="px-3 py-2">
+              <div class="font-medium text-slate-800">${loan.book_title}</div>
+              <div class="text-xs text-slate-500">${loan.borrower_name} (${loan.borrower_nim})</div>
+            </td>
+            <td class="px-3 py-2 text-center">
+              <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${isBorrowed ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}">
+                ${loan.status}
+              </span>
+            </td>
+            <td class="px-3 py-2 text-right space-x-2">
+              ${isBorrowed ? `<button onclick="returnBook(${loan.id})" class="text-xs bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700">Kembalikan</button>` : ''}
+              <button onclick="deleteLoan(${loan.id})" class="text-xs text-rose-600 hover:underline">Hapus</button>
+            </td>
+          </tr>
+        `;
+      });
+    }
+
+    document.getElementById('bookForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        title: document.getElementById('title').value,
+        author: document.getElementById('author').value,
+        category: document.getElementById('category').value,
+        isbn: document.getElementById('isbn').value,
+        stock: Number(document.getElementById('stock').value),
+      };
+      const res = await fetch('/api/catalog', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.inter_service_log) addLog(data.inter_service_log);
+      e.target.reset();
+      document.getElementById('stock').value = 3;
+      loadCatalog();
+    });
+
+    document.getElementById('loanForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        book_id: document.getElementById('bookSelect').value,
+        borrower_name: document.getElementById('borrowerName').value,
+        borrower_nim: document.getElementById('borrowerNim').value,
+      };
+      const res = await fetch('/api/loans', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (data.inter_service_logs) data.inter_service_logs.forEach(addLog);
+      if (!data.success) alert(data.message);
+      e.target.reset();
+      loadCatalog();
+      loadLoans();
+    });
+
+    async function returnBook(id) {
+      const res = await fetch(`/api/loans/${id}/return`, { method: 'PUT' });
+      const data = await res.json();
+      if (data.inter_service_logs) data.inter_service_logs.forEach(addLog);
+      loadCatalog();
+      loadLoans();
+    }
+
+    async function deleteBook(id) {
+      const res = await fetch(`/api/catalog/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.inter_service_log) addLog(data.inter_service_log);
+      loadCatalog();
+    }
+
+    async function deleteLoan(id) {
+      const res = await fetch(`/api/loans/${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (data.inter_service_logs) data.inter_service_logs.forEach(addLog);
+      loadCatalog();
+      loadLoans();
+    }
+
+    checkConfig();
+    loadCatalog();
+    loadLoans();
+  </script>
+</body>
+</html>
